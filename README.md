@@ -16,14 +16,14 @@ sys     0m4.024s
 When checking it with agda-mt :
 
 ```
-time node cagda.js Everything.agda 10
+time node cagda.js Everything.agda 6
 ```
 
 we get :
 
 ```
-real    10m12.217s
-user    47m7.601s
-sys     1m21.893s
+real    9m57.539s
+user    34m30.467s
+sys     0m58.157s
 ```
 
