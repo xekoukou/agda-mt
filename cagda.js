@@ -105,7 +105,7 @@ function typeCheckNextNode() {
         var nn = tclist.pop();
 	par = par + 1;
 	console.log("Starting to typecheck file " + nn.lpath + ".agda");
-	console.log("Parellelism level : " + par);
+	console.log("Parallelism level : " + par);
 	typeCheckFile(nn.lpath);
     }
     if((pool.length == mpar) && (tclist.length == 0)) {
