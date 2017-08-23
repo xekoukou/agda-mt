@@ -8,22 +8,23 @@ Typechecking HoTT-Agda (everything in the theorem folder) with a single agda pro
 
 
 ```
-real    16m55.396s
-user    16m50.549s
-sys     0m4.024s
+real    14m20.085s
+user    14m15.585s
+sys     0m3.967s
 ```
 
 When checking it with agda-mt :
 
 ```
-time node cagda.js Everything.agda 6
+time node cagda.js Everything.agda 4
 ```
 
 we get :
 
 ```
-real    9m57.539s
-user    34m30.467s
-sys     0m58.157s
+real    7m5.636s
+user    18m29.676s
+sys     0m15.526s
 ```
+
 

@@ -15,6 +15,8 @@ var par = 0;
 var tclist = [];
 var graph = {};
 
+var pool = [];
+
 function readFile (lpath) {
     try {
         var source = fs.readFileSync(lpath + ".agda" , {encoding: "utf-8"});
@@ -62,7 +64,6 @@ function createNode (graph ,lpath) {
     if(nn) {
 	source = readFile("./" + lpath);
 	if (source == null) {
-	    console.log("Null : " + lpath);
 	    delete graph[lpath];
 	    return null;
 	}
@@ -82,12 +83,9 @@ function createNode (graph ,lpath) {
 
 function findInitialNodes(graph, node) {
    delete graph[node.lpath];
-   console.log("At node : " + node.lpath);
    if(node.backward.length == 0){
-      console.log("Adding node.");
       tclist.push(node);
    } else {
-       console.log("Backward");
        for(var i = 0; i < node.backward.length; i++) {
           if (graph[node.backward[i]] != undefined) {
              findInitialNodes(graph, graph[node.backward[i]]);
@@ -101,44 +99,101 @@ function findInitialNodes(graph, node) {
 
 
 
-function typeCheckNextNode(code) {
-    if((code == 1)) {
-	return;
-    }
-    while((par < mpar) && (tclist.length != 0)) {
+function typeCheckNextNode() {
+
+    while((pool.length != 0) && (tclist.length != 0)) {
         var nn = tclist.pop();
 	par = par + 1;
 	console.log("Starting to typecheck file " + nn.lpath + ".agda");
 	console.log("Parellelism level : " + par);
 	typeCheckFile(nn.lpath);
     }
+    if((pool.length == mpar) && (tclist.length == 0)) {
+	destroyPool();
+    }
 }
 
 function typeCheckFile(lpath) {
-    var node = graph[lpath];
-    child = spawn("agda", [ "./" + lpath + ".agda" ]);
+    var node = graph[lpath]
+    
+    var ps = pool.pop();
+    ps.counter = ps.counter - 1;
 
-    child.on("exit" , function(code, signal) {
+    
+    var rpath = "./" + lpath + ".agda";
+    ps.ps.stdin.write('IOTCM "' + rpath + '" None Direct (Cmd_load "' + rpath + '" [])\n');
+
+    var cb = function(data) {
+	out = data.toString();
+
+	if(out.indexOf("((last . ") == -1) {
+            return;
+	}
+
+	ps.ps.stdout.removeListener("data" , cb);
+	addPsBack(ps);
+
+	if(out.indexOf("((last . 1) . (agda2-goals-action '()))") == -1) {
+	    console.log("Something didn't typecheck for file : " + lpath);
+            par = par - 1;
+	    typeCheckNextNode();
+	    return;
+	}
+
 	console.log("I typechecked file " + node.lpath + ".agda"); 
-        par = par - 1 ;
+        par = par - 1;
 
 	for(var i = 0; i < node.forward.length; i++){
 	    fn = graph[node.forward[i]];
             var index = fn.backward.indexOf(lpath);
-	    if(index != -1) {
-		fn.backward.splice(index, 1);
-	    }
+	    fn.backward.splice(index, 1);
 	    if(fn.backward.length == 0) {
 		tclist.push(fn);
 	    }
 	}
 
-       typeCheckNextNode(code);
-    })
+       typeCheckNextNode();
+    };
+    
+    ps.ps.stdout.on("data" , cb)
 }
 
+
+function createPs() {
+    var child = spawn("agda",["--interaction" , "--caching"]);
+    child.stdin.setEncoding('utf-8');
+    var ps = {};
+    ps.ps = child;
+    ps.counter = 10;
+    return ps;
+}
+
+
+function createProcessPool() {
+    for(var i = 0; i < mpar; i++) {
+	var ps = createPs();
+	pool.push(ps);
+    }
+}
+
+function addPsBack(ps) {
+    var nps = ps;
+    if(ps.counter == 0) {
+	ps.ps.kill('SIGINT');
+	nps = createPs();
+    }
+    pool.push(nps);
+}
+
+function destroyPool() {
+    while(pool.length != 0) {
+	var ps = pool.pop();
+	ps.ps.kill('SIGINT');
+    }
+}
 
 
 graph = createGraph(root);
 findInitialNodes(Object.assign({} , graph), graph[root]);
-typeCheckNextNode(0);
+createProcessPool();
+typeCheckNextNode();
