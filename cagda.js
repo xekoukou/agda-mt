@@ -28,7 +28,9 @@ function readFile (lpath) {
 
 
 function findImports (source) {
-    var r =  source.split("import");
+    var r =  source.split("\n").filter(function(line){
+	return ((line.search(/^\s*\-\-/) < 0) && (line.indexOf("import") >= 0)); }).map(function(line) {
+	    return line.split("import")[1];})
     var list = [];
     var re = /\s+/;
     var re2 = /\./gi;
@@ -116,7 +118,7 @@ function typeCheckNextNode() {
 function typeCheckFile(lpath) {
     var node = graph[lpath]
     
-    var ps = pool.pop();
+    var ps = chooseProcess(lpath);
     ps.counter = ps.counter - 1;
 
     
@@ -125,13 +127,12 @@ function typeCheckFile(lpath) {
 
     var cb = function(data) {
 	out = data.toString();
-
 	if(out.indexOf("((last . ") == -1) {
             return;
 	}
 
 	ps.ps.stdout.removeListener("data" , cb);
-	addPsBack(ps);
+	ps = addPsBack(ps);
 
 	if(out.indexOf("((last . 1) . (agda2-goals-action '()))") == -1) {
 	    console.log("Something didn't typecheck for file : " + lpath);
@@ -149,6 +150,11 @@ function typeCheckFile(lpath) {
 	    fn.backward.splice(index, 1);
 	    if(fn.backward.length == 0) {
 		tclist.push(fn);
+	    } else {
+		// Trying to achieve memory locality.
+		if(ps !== null) {
+		    ps.fs[fn.lpath] = true;
+		}
 	    }
 	}
 
@@ -159,12 +165,27 @@ function typeCheckFile(lpath) {
 }
 
 
+function chooseProcess(lpath) {
+    var ps;
+    for(var i = 0; i < pool.length; i++) {
+	ps = pool[i];
+	if(ps.fs[lpath]){
+            pool.splice(i,1);
+	    delete ps.fs[lpath];
+	    return ps;
+	}
+    }
+    ps = pool.pop();
+    return ps;
+}
+
 function createPs() {
     var child = spawn("agda",["--interaction" , "--caching"]);
     child.stdin.setEncoding('utf-8');
     var ps = {};
     ps.ps = child;
-    ps.counter = 10;
+    ps.counter = 20;
+    ps.fs = {};
     return ps;
 }
 
@@ -177,12 +198,13 @@ function createProcessPool() {
 }
 
 function addPsBack(ps) {
-    var nps = ps;
     if(ps.counter == 0) {
 	ps.ps.kill('SIGINT');
-	nps = createPs();
+	pool.push(createPs());
+	return null;
     }
-    pool.push(nps);
+    pool.push(ps);
+    return ps;
 }
 
 function destroyPool() {
