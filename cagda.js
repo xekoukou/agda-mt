@@ -48,7 +48,7 @@ function createGraph (root) {
 }
 
 function addNode (graph , node) {
-    if(graph[node.lpath] == null) {
+    if(graph[node.lpath] == undefined) {
 	graph[node.lpath] = node;
 	return true;
     }
